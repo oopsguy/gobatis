@@ -1,6 +1,6 @@
-package sql
+package gobatis
 
-// A SQL statement builder which refrence apache MyBatis SQL class
+// An SQL builder inspired by MyBatis SQL class
 
 import (
 	"bytes"
@@ -13,7 +13,7 @@ const (
 	stmConstUpdate
 
 	logicAND = ") \nAND ("
-	logicOR = ") \nOR ("
+	logicOR  = ") \nOR ("
 )
 
 type appendable interface {
@@ -23,72 +23,72 @@ type appendable interface {
 
 type safeAppendable struct {
 	appender appendable
-	empty bool
+	empty    bool
 }
 
 func newSafeAppendable(a appendable) *safeAppendable {
 	return &safeAppendable{
 		appender: a,
-		empty: true,
+		empty:    true,
 	}
 }
 
-func (this *safeAppendable) append(s string) *safeAppendable {
-	if this.empty && len(s) > 0 {
-		this.empty = false
+func (s *safeAppendable) append(str string) *safeAppendable {
+	if s.empty && len(str) > 0 {
+		s.empty = false
 	}
-	_, err := this.appender.WriteString(s)
+	_, err := s.appender.WriteString(str)
 	if err != nil {
 		panic(err)
 	}
-	return this
+	return s
 }
 
-func (this *safeAppendable) String() string {
-	return this.appender.String()
+func (s *safeAppendable) String() string {
+	return s.appender.String()
 }
 
 type statement struct {
-	stmConstType int
-	sets []string
-	selects []string
-	tables []string
-	join []string
-	innerJoin []string
-	outerJoin []string
-	leftOuterJoin []string
+	stmConstType   int
+	sets           []string
+	selects        []string
+	tables         []string
+	join           []string
+	innerJoin      []string
+	outerJoin      []string
+	leftOuterJoin  []string
 	rightOuterJoin []string
-	where *[]string
-	having []string
-	groupBy []string
-	orderBy []string
-	lastList *[]string
-	columns []string
-	values []string
-	distinct bool
+	where          *[]string
+	having         []string
+	groupBy        []string
+	orderBy        []string
+	lastList       *[]string
+	columns        []string
+	values         []string
+	distinct       bool
 }
 
 func newStatement() *statement {
 	return &statement{
-		sets: []string{},
-		selects: []string{},
-		tables: []string{},
-		join: []string{},
-		innerJoin: []string{},
-		outerJoin: []string{},
-		leftOuterJoin: []string{},
+		sets:           []string{},
+		selects:        []string{},
+		tables:         []string{},
+		join:           []string{},
+		innerJoin:      []string{},
+		outerJoin:      []string{},
+		leftOuterJoin:  []string{},
 		rightOuterJoin: []string{},
-		where: &[]string{},
-		having: []string{},
-		groupBy: []string{},
-		orderBy: []string{},
-		lastList: &[]string{},
-		columns: []string{},
-		values: []string{},
+		where:          &[]string{},
+		having:         []string{},
+		groupBy:        []string{},
+		orderBy:        []string{},
+		lastList:       &[]string{},
+		columns:        []string{},
+		values:         []string{},
 	}
 }
 
-func (this *statement) sqlClause(builder *safeAppendable, keyword string, parts []string, open string, close string, conjunction string) {
+func (s *statement) sqlClause(builder *safeAppendable, keyword string, parts []string, open string, close string, conjunction string) {
 	if parts == nil || len(parts) == 0 {
 		return
 	}
@@ -99,11 +99,11 @@ func (this *statement) sqlClause(builder *safeAppendable, keyword string, parts 
 	builder.append(keyword)
 	builder.append(" ")
 	builder.append(open)
-	
+
 	last := "________"
 	i := 0
 	// TODO ++i NO i++
-	for n:=len(parts); i<n; i++ {
+	for n := len(parts); i < n; i++ {
 		part := parts[i]
 		if i > 0 && part != logicAND && part != logicOR && last != logicAND && last != logicOR {
 			builder.append(conjunction)
@@ -115,77 +115,72 @@ func (this *statement) sqlClause(builder *safeAppendable, keyword string, parts 
 	builder.append(close)
 }
 
-func (this *statement) selectsqlBuilder(builder *safeAppendable) string {
-	if this.distinct {
-		this.sqlClause(builder, "SELECT DISTINCT", this.selects, "", "", ", ")
+func (s *statement) selectSqlBuilder(builder *safeAppendable) string {
+	if s.distinct {
+		s.sqlClause(builder, "SELECT DISTINCT", s.selects, "", "", ", ")
 	} else {
-		this.sqlClause(builder, "SELECT", this.selects, "", "", ", ")
+		s.sqlClause(builder, "SELECT", s.selects, "", "", ", ")
 	}
 
-	this.sqlClause(builder, "FROM", this.tables, "", "", ", ")
-	this.joins(builder)
-	this.sqlClause(builder, "WHERE", *this.where, "(", ")", " AND ")
-	this.sqlClause(builder, "GROUP BY", this.groupBy, "", "", ", ")
-	this.sqlClause(builder, "HAVING", this.having, "(", ")", " AND ")
-	this.sqlClause(builder, "ORDER BY", this.orderBy, "", "", ", ")
+	s.sqlClause(builder, "FROM", s.tables, "", "", ", ")
+	s.joins(builder)
+	s.sqlClause(builder, "WHERE", *s.where, "(", ")", " AND ")
+	s.sqlClause(builder, "GROUP BY", s.groupBy, "", "", ", ")
+	s.sqlClause(builder, "HAVING", s.having, "(", ")", " AND ")
+	s.sqlClause(builder, "ORDER BY", s.orderBy, "", "", ", ")
 	return builder.String()
 }
 
-func (this *statement) joins(builder *safeAppendable) {
-	this.sqlClause(builder, "JOIN", this.join, "", "", "\nJOIN ")
-	this.sqlClause(builder, "INNER JOIN", this.innerJoin, "", "", "\nINNER JOIN ")
-	this.sqlClause(builder, "OUTER JOIN", this.outerJoin, "", "", "\nOUTER JOIN ")
-	this.sqlClause(builder, "LEFT OUTER JOIN", this.leftOuterJoin, "", "", "\nLEFT OUTER JOIN ")
-	this.sqlClause(builder, "RIGHT OUTER JOIN", this.rightOuterJoin, "", "", "\nRIGHT OUTER JOIN ")
+func (s *statement) joins(builder *safeAppendable) {
+	s.sqlClause(builder, "JOIN", s.join, "", "", "\nJOIN ")
+	s.sqlClause(builder, "INNER JOIN", s.innerJoin, "", "", "\nINNER JOIN ")
+	s.sqlClause(builder, "OUTER JOIN", s.outerJoin, "", "", "\nOUTER JOIN ")
+	s.sqlClause(builder, "LEFT OUTER JOIN", s.leftOuterJoin, "", "", "\nLEFT OUTER JOIN ")
+	s.sqlClause(builder, "RIGHT OUTER JOIN", s.rightOuterJoin, "", "", "\nRIGHT OUTER JOIN ")
 }
 
-func (this *statement) insertsqlBuilder(builder *safeAppendable) string {
-	this.sqlClause(builder, "INSERT INTO", this.tables, "", "", "")
-	this.sqlClause(builder, "", this.columns, "(", ")", ", ")
-	this.sqlClause(builder, "VALUES", this.values, "(", ")", ", ")
+func (s *statement) insertSqlBuilder(builder *safeAppendable) string {
+	s.sqlClause(builder, "INSERT INTO", s.tables, "", "", "")
+	s.sqlClause(builder, "", s.columns, "(", ")", ", ")
+	s.sqlClause(builder, "VALUES", s.values, "(", ")", ", ")
 	return builder.String()
 }
 
-func (this *statement) deletesqlBuilder(builder *safeAppendable) string {
-	this.sqlClause(builder, "DELETE FROM", this.tables, "", "", "")
-	this.sqlClause(builder, "WHERE", *this.where, "(", ")", " AND ")
+func (s *statement) deleteSqlBuilder(builder *safeAppendable) string {
+	s.sqlClause(builder, "DELETE FROM", s.tables, "", "", "")
+	s.sqlClause(builder, "WHERE", *s.where, "(", ")", " AND ")
 	return builder.String()
 }
 
-func (this *statement) updatesqlBuilder(builder *safeAppendable) string {
-	this.sqlClause(builder, "UPDATE", this.tables, "", "", "")
-	this.joins(builder)
-	this.sqlClause(builder, "SET", this.sets, "", "", ", ")
-	this.sqlClause(builder, "WHERE", *this.where, "(", ")", " AND ")
+func (s *statement) updateSqlBuilder(builder *safeAppendable) string {
+	s.sqlClause(builder, "UPDATE", s.tables, "", "", "")
+	s.joins(builder)
+	s.sqlClause(builder, "SET", s.sets, "", "", ", ")
+	s.sqlClause(builder, "WHERE", *s.where, "(", ")", " AND ")
 	return builder.String()
 }
 
-func (this *statement) sql(a appendable) string {
+func (s *statement) sql(a appendable) string {
 	builder := newSafeAppendable(a)
-	if this.stmConstType == 0 {
+	if s.stmConstType == 0 {
 		return ""
 	}
 
 	answer := ""
-	switch this.stmConstType {
-		case stmConstDelete:
-			answer = this.deletesqlBuilder(builder);
-			break;
-		case stmConstInsert:
-			answer = this.insertsqlBuilder(builder);
-			break;
-		case stmConstSelect:
-			answer = this.selectsqlBuilder(builder);
-			break;
-		case stmConstUpdate:
-			answer = this.updatesqlBuilder(builder);
-			break;
+	switch s.stmConstType {
+	case stmConstDelete:
+		answer = s.deleteSqlBuilder(builder)
+	case stmConstInsert:
+		answer = s.insertSqlBuilder(builder)
+	case stmConstSelect:
+		answer = s.selectSqlBuilder(builder)
+	case stmConstUpdate:
+		answer = s.updateSqlBuilder(builder)
 	}
 
 	return answer
 }
 
-// SQL Builder facade, expose apis which used to build sql statement
 type sqlBuilder struct {
 	sqlStm *statement
 }
@@ -196,125 +191,125 @@ func NewSqlBuilder() *sqlBuilder {
 	}
 }
 
-func (this *sqlBuilder) UPDATE(table string) *sqlBuilder {
-	this.sqlStm.stmConstType = stmConstUpdate
-	this.sqlStm.tables = append(this.sqlStm.tables, table)
-	return this
+func (s *sqlBuilder) Update(table string) *sqlBuilder {
+	s.sqlStm.stmConstType = stmConstUpdate
+	s.sqlStm.tables = append(s.sqlStm.tables, table)
+	return s
 }
 
-func (this *sqlBuilder) SET(sets ...string) *sqlBuilder {
-	this.sqlStm.sets = append(this.sqlStm.sets, sets...)
-	return this
+func (s *sqlBuilder) Set(sets ...string) *sqlBuilder {
+	s.sqlStm.sets = append(s.sqlStm.sets, sets...)
+	return s
 }
 
-func (this *sqlBuilder) INSERT_INTO(table string) *sqlBuilder {
-	this.sqlStm.stmConstType = stmConstInsert
-	this.sqlStm.tables = append(this.sqlStm.tables, table)
-	return this
+func (s *sqlBuilder) InserInto(table string) *sqlBuilder {
+	s.sqlStm.stmConstType = stmConstInsert
+	s.sqlStm.tables = append(s.sqlStm.tables, table)
+	return s
 }
 
-func (this *sqlBuilder) VALUES(columns string, values string) *sqlBuilder {
-	this.sqlStm.columns = append(this.sqlStm.columns, columns)
-	this.sqlStm.values = append(this.sqlStm.values, values)
-	return this
+func (s *sqlBuilder) Values(columns string, values string) *sqlBuilder {
+	s.sqlStm.columns = append(s.sqlStm.columns, columns)
+	s.sqlStm.values = append(s.sqlStm.values, values)
+	return s
 }
 
-func (this *sqlBuilder) INTO_COLUMNS(columns ...string) *sqlBuilder {
-	this.sqlStm.columns = append(this.sqlStm.columns, columns...)
-	return this
+func (s *sqlBuilder) IntoColumns(columns ...string) *sqlBuilder {
+	s.sqlStm.columns = append(s.sqlStm.columns, columns...)
+	return s
 }
 
-func (this *sqlBuilder) INTO_VALUES(values ...string) *sqlBuilder {
-	this.sqlStm.values = append(this.sqlStm.values, values...)
-	return this
+func (s *sqlBuilder) IntoValues(values ...string) *sqlBuilder {
+	s.sqlStm.values = append(s.sqlStm.values, values...)
+	return s
 }
 
-func (this *sqlBuilder) SELECT(columns ...string) *sqlBuilder {
-	this.sqlStm.stmConstType = stmConstSelect
-	this.sqlStm.selects = append(this.sqlStm.selects, columns...)
-	return this
+func (s *sqlBuilder) Select(columns ...string) *sqlBuilder {
+	s.sqlStm.stmConstType = stmConstSelect
+	s.sqlStm.selects = append(s.sqlStm.selects, columns...)
+	return s
 }
 
-func (this *sqlBuilder) SELECT_DISTINCT(columns ...string) *sqlBuilder {
-	this.sqlStm.distinct = true
-	this.SELECT(columns...)
-	return this
+func (s *sqlBuilder) SelectDistinct(columns ...string) *sqlBuilder {
+	s.sqlStm.distinct = true
+	s.Select(columns...)
+	return s
 }
 
-func (this *sqlBuilder) DELETE_FROM(table string) *sqlBuilder {
-	this.sqlStm.stmConstType = stmConstDelete
-	this.sqlStm.tables = append(this.sqlStm.tables, table)
-	return this
+func (s *sqlBuilder) DeleteFrom(table string) *sqlBuilder {
+	s.sqlStm.stmConstType = stmConstDelete
+	s.sqlStm.tables = append(s.sqlStm.tables, table)
+	return s
 }
 
-func (this *sqlBuilder) FROM(tables ...string) *sqlBuilder {
-	this.sqlStm.tables = append(this.sqlStm.tables, tables...)
-	return this
+func (s *sqlBuilder) From(tables ...string) *sqlBuilder {
+	s.sqlStm.tables = append(s.sqlStm.tables, tables...)
+	return s
 }
 
-func (this *sqlBuilder) JOIN(joins ...string) *sqlBuilder {
-	this.sqlStm.join = append(this.sqlStm.join, joins...)
-	return this
+func (s *sqlBuilder) Join(joins ...string) *sqlBuilder {
+	s.sqlStm.join = append(s.sqlStm.join, joins...)
+	return s
 }
 
-func (this *sqlBuilder) INNER_JOIN(joins ...string) *sqlBuilder {
-	this.sqlStm.innerJoin = append(this.sqlStm.innerJoin, joins...)
-	return this
+func (s *sqlBuilder) InnerJoin(joins ...string) *sqlBuilder {
+	s.sqlStm.innerJoin = append(s.sqlStm.innerJoin, joins...)
+	return s
 }
 
-func (this *sqlBuilder) LEFT_OUTER_JOIN(joins ...string) *sqlBuilder {
-	this.sqlStm.leftOuterJoin = append(this.sqlStm.leftOuterJoin, joins...)
-	return this
+func (s *sqlBuilder) LeftOuterJoin(joins ...string) *sqlBuilder {
+	s.sqlStm.leftOuterJoin = append(s.sqlStm.leftOuterJoin, joins...)
+	return s
 }
 
-func (this *sqlBuilder) RIGHT_OUTER_JOIN(joins ...string) *sqlBuilder {
-	this.sqlStm.rightOuterJoin = append(this.sqlStm.rightOuterJoin, joins...)
-	return this
+func (s *sqlBuilder) RightOuterJoin(joins ...string) *sqlBuilder {
+	s.sqlStm.rightOuterJoin = append(s.sqlStm.rightOuterJoin, joins...)
+	return s
 }
 
-func (this *sqlBuilder) OUTER_JOIN(joins ...string) *sqlBuilder {
-	this.sqlStm.outerJoin = append(this.sqlStm.outerJoin, joins...)
-	return this
+func (s *sqlBuilder) OuterJoin(joins ...string) *sqlBuilder {
+	s.sqlStm.outerJoin = append(s.sqlStm.outerJoin, joins...)
+	return s
 }
 
-func (this *sqlBuilder) WHERE(conditions ...string) *sqlBuilder {
-	sliceRefAppend(this.sqlStm.where, conditions...)
-	this.sqlStm.lastList = this.sqlStm.where;
-	return this
+func (s *sqlBuilder) Where(conditions ...string) *sqlBuilder {
+	sliceRefAppend(s.sqlStm.where, conditions...)
+	s.sqlStm.lastList = s.sqlStm.where
+	return s
 }
 
-func (this *sqlBuilder) OR() *sqlBuilder {
-	sliceRefAppend(this.sqlStm.lastList, logicOR)
-	return this
+func (s *sqlBuilder) Or() *sqlBuilder {
+	sliceRefAppend(s.sqlStm.lastList, logicOR)
+	return s
 }
 
-func (this *sqlBuilder) AND() *sqlBuilder {
-	sliceRefAppend(this.sqlStm.lastList, logicAND)
-	return this
+func (s *sqlBuilder) And() *sqlBuilder {
+	sliceRefAppend(s.sqlStm.lastList, logicAND)
+	return s
 }
 
-func (this *sqlBuilder) GROUP_BY(columns ...string) *sqlBuilder {
-	this.sqlStm.groupBy = append(this.sqlStm.groupBy, columns...)
-	return this
+func (s *sqlBuilder) GroupBy(columns ...string) *sqlBuilder {
+	s.sqlStm.groupBy = append(s.sqlStm.groupBy, columns...)
+	return s
 }
 
-func (this *sqlBuilder) HAVING(conditions ...string) *sqlBuilder {
-	this.sqlStm.having = append(this.sqlStm.having, conditions...)
-	return this
+func (s *sqlBuilder) Having(conditions ...string) *sqlBuilder {
+	s.sqlStm.having = append(s.sqlStm.having, conditions...)
+	return s
 }
 
-func (this *sqlBuilder) ORDER_BY(columns ...string) *sqlBuilder {
-	this.sqlStm.orderBy = append(this.sqlStm.orderBy, columns...)
-	return this
+func (s *sqlBuilder) OrderBy(columns ...string) *sqlBuilder {
+	s.sqlStm.orderBy = append(s.sqlStm.orderBy, columns...)
+	return s
 }
 
-func (this *sqlBuilder) String() string {
-	return this.sqlStm.sql(&bytes.Buffer{})
+func (s *sqlBuilder) String() string {
+	return s.sqlStm.sql(&bytes.Buffer{})
 }
 
-func (this *sqlBuilder) Clear() *sqlBuilder {
-	this.sqlStm = newStatement()
-	return this
+func (s *sqlBuilder) Clear() *sqlBuilder {
+	s.sqlStm = newStatement()
+	return s
 }
 
 func sliceRefAppend(slice *[]string, val ...string) {
